@@ -45,6 +45,8 @@ class SupermercadoApp:
         
         # Carregar dados iniciais
         self.load_data()
+
+        self.carregar_sugestoes_quem_pagou()
     
     def setup_styles(self):
         """Configura estilos para a interface"""
@@ -154,11 +156,47 @@ class SupermercadoApp:
         ttk.Checkbutton(form_frame, text="Em promoção", 
                        variable=self.promocao_var).grid(row=5, column=1, sticky='w', pady=5)
         
+        #Quem Pagou
+        ttk.Label(form_frame,text="Quem Pagou:").grid(
+            row=6, column=0, sticky='w', pady=5)
+        self.quem_pagou_var = tk.StringVar()
+        self.combo_quem_pagou = ttk.Combobox(
+            form_frame,
+            textvariable=self.quem_pagou_var,
+            values=["Eu", "Nadiny", "Outro"],
+            width=15
+        )
+        self.combo_quem_pagou.grid(row=6, column=1, sticky='w', pady=5, padx=5)
+        self.combo_quem_pagou.set("Eu") #Valor padrao
+
         # Observações
         ttk.Label(form_frame, text="Observações:").grid(
-            row=6, column=0, sticky='nw', pady=5)
+            row=9, column=0, sticky='nw', pady=5)
         self.text_observacoes = tk.Text(form_frame, height=4, width=30)
-        self.text_observacoes.grid(row=6, column=1, pady=5, padx=5, sticky='w')
+        self.text_observacoes.grid(row=9, column=1, pady=5, padx=5, sticky='w')
+
+    def carregar_sugestoes_quem_pagou(self):
+        """Carrega sugestões de quem pagou baseado no histórico"""
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+        SELECT DISTINCT quem_pagou 
+        FROM compras 
+        WHERE quem_pagou != ''
+        ORDER BY quem_pagou
+        ''')
+        
+        sugestoes = [row[0] for row in cursor.fetchall()]
+        
+        # Adicionar valores padrão se não existirem
+        valores_padrao = ["Eu", "Parceiro(a)", "Família", "Amigo", "Outro"]
+        todos_valores = list(set(sugestoes + valores_padrao))
+        
+        # Atualizar o combobox
+        self.combo_quem_pagou['values'] = todos_valores
+        
+        conn.close()
     
     def criar_botoes_registro(self, form_frame):
         """Cria os botões do formulário de registro"""
@@ -187,7 +225,7 @@ class SupermercadoApp:
         historico_frame.pack(fill='both', expand=True, padx=10, pady=10)
         
         # Treeview para histórico
-        columns = ('Data', 'Produto', 'Supermercado', 'Preço', 'Qtd', 'Promoção')
+        columns = ('Data', 'Produto', 'Supermercado', 'Preço', 'Qtd', 'Promoção', "Quem Pagou")
         self.tree_historico = ttk.Treeview(historico_frame, columns=columns, show='headings', height=10)
         
         for col in columns:
@@ -363,7 +401,7 @@ class SupermercadoApp:
         cursor = conn.cursor()
         
         cursor.execute('''
-        SELECT c.data_compra, p.nome, s.nome, c.preco, c.quantidade, c.promoção
+        SELECT c.data_compra, p.nome, s.nome, c.preco, c.quantidade, c.promoção, c.quem_pagou
         FROM compras c
         JOIN produtos p ON c.produto_id = p.id
         JOIN supermercados s ON c.supermercado_id = s.id
@@ -383,9 +421,10 @@ class SupermercadoApp:
             preco = formatar_moeda(row[3])
             qtd = f"{row[4]} un"
             promocao = "✅" if row[5] else "❌"
+            quem_pagou = row[6] if row[6] else "Não informado"
             
             self.tree_historico.insert('', 'end', 
-                                      values=(data, produto, supermercado, preco, qtd, promocao))
+                                      values=(data, produto, supermercado, preco, qtd, promocao, quem_pagou))
         
         conn.close()
     
@@ -465,10 +504,10 @@ class SupermercadoApp:
             # Inserir compra
             cursor.execute('''
             INSERT INTO compras (produto_id, supermercado_id, preco, quantidade, 
-                               data_compra, promoção, observacoes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                               data_compra, promoção,quem_pagou, observacoes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (produto_id, supermercado_id, preco_val, quantidade, 
-                  data_obj, 1 if self.promocao_var.get() else 0,
+                  data_obj, 1 if self.promocao_var.get() else 0,self.quem_pagou_var.get(),
                   self.text_observacoes.get("1.0", "end-1c")))
             
             conn.commit()
@@ -494,6 +533,7 @@ class SupermercadoApp:
         self.entry_data.delete(0, 'end')
         self.entry_data.insert(0, date.today().strftime("%d/%m/%Y"))
         self.promocao_var.set(False)
+        self.quem_pagou_var.set("Eu")  # NOVO: resetar para valor padrão
         self.text_observacoes.delete("1.0", "end")
     
     def buscar_precos(self):
@@ -506,7 +546,7 @@ class SupermercadoApp:
         
         query = '''
         SELECT c.data_compra, p.nome, s.nome, c.preco, c.quantidade, 
-               c.preco/c.quantidade as preco_unitario, c.promoção
+               c.preco/c.quantidade as preco_unitario, c.promoção, c.quem_pagou
         FROM compras c
         JOIN produtos p ON c.produto_id = p.id
         JOIN supermercados s ON c.supermercado_id = s.id
@@ -544,10 +584,11 @@ class SupermercadoApp:
             preco_unit = formatar_moeda(row[5])
             qtd = f"{row[4]}"
             promocao = "✅" if row[6] else "❌"
+            quem_pagou = row[7] if row[7] else "Não informado"
             
             self.tree_consulta.insert('', 'end', 
                                     values=(data, produto_nome, supermercado_nome, 
-                                            preco, preco_unit, qtd, promocao))
+                                            preco, preco_unit, qtd, promocao, quem_pagou))
         
         # Calcular estatísticas
         if produto:

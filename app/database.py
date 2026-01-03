@@ -51,11 +51,15 @@ def init_db():
         quantidade REAL DEFAULT 1,
         data_compra DATE NOT NULL,
         promoção BOOLEAN DEFAULT 0,
+        quem_pagou TEXT DEFAULT '',  -- NOVO CAMPO
         observacoes TEXT,
         FOREIGN KEY (produto_id) REFERENCES produtos(id),
         FOREIGN KEY (supermercado_id) REFERENCES supermercados(id)
     )
     ''')
+
+    adicionar_coluna_quem_pagou()
+
     
     # Inserir categorias padrão
     categorias_padrao = [
@@ -163,3 +167,23 @@ def buscar_produtos_similares(termo, limite=5):
             produtos_formatados.append(nome)
     
     return produtos_formatados
+
+def adicionar_coluna_quem_pagou():
+    """Adiciona a coluna quem_pagou se não existir na tabela compras"""
+    conn = sqlite3.connect('supermercado.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Verificar se a coluna quem_pagou existe
+        cursor.execute("PRAGMA table_info(compras)")
+        colunas = [col[1] for col in cursor.fetchall()]
+        
+        if 'quem_pagou' not in colunas:
+            print("Adicionando coluna 'quem_pagou' à tabela compras...")
+            cursor.execute("ALTER TABLE compras ADD COLUMN quem_pagou TEXT DEFAULT ''")
+            conn.commit()
+            print("✅ Coluna 'quem_pagou' adicionada com sucesso!")
+    except Exception as e:
+        print(f"Erro ao adicionar coluna: {e}")
+    finally:
+        conn.close()

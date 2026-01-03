@@ -13,13 +13,14 @@ class Produto:
 
 class Compra:
     def __init__(self, produto_id, supermercado_id, preco, data_compra,
-                 quantidade=1, promocao=False, observacoes=''):
+                 quantidade=1, promocao=False, quem_pagou ='', observacoes=''):
         self.produto_id = produto_id
         self.supermercado_id = supermercado_id
         self.preco = preco
         self.quantidade = quantidade
         self.data_compra = data_compra
         self.promocao = promocao
+        self.quem_pagou = quem_pagou
         self.observacoes = observacoes
 
     def preco_unitario(self):
